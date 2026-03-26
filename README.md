@@ -43,14 +43,7 @@ npm run dev
 | Cohere | `COHERE_API_KEY` |
 | Together | `TOGETHER_API_KEY` |
 
-## Deploy to Vercel
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/bhavanisingh/obsidian)
-
-1. Push to GitHub
-2. Import repo in [Vercel Dashboard](https://vercel.com/new)
-3. Add environment variables (see `.env.example`)
-4. Deploy — `vercel.json` handles Prisma generation and function timeouts automatically
 
 ## Architecture
 
