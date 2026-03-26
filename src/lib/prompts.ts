@@ -4,26 +4,64 @@ export type Worker = "worker1" | "worker2" | "worker3" | "master";
 export function getStagePrompt(
   stage: Stage,
   worker: Worker,
-  userPrompt: string
+  userPrompt: string,
+  options?: { workerOutputs?: string[]; previousStageContext?: string }
 ): string {
-  const basePrompt = `You are an AI assistant working in a multi-model orchestration system. The user's original request is: "${userPrompt}"
+  let basePrompt = `You are an AI assistant working in a multi-model orchestration system. The user's original request is: "${userPrompt}"
 
 You are currently in the ${stage.toUpperCase()} stage, working as ${worker.toUpperCase()}.
 
 `;
 
+  if (options?.previousStageContext) {
+    basePrompt = `Context from previous stage:
+${options.previousStageContext}
+
+` + basePrompt;
+  }
+
+  let prompt = basePrompt;
   switch (stage) {
     case "research":
-      return getResearchPrompt(worker, basePrompt);
+      prompt = getResearchPrompt(worker, basePrompt);
+      break;
     case "reasoning":
-      return getReasoningPrompt(worker, basePrompt);
+      prompt = getReasoningPrompt(worker, basePrompt);
+      break;
     case "coding":
-      return getCodingPrompt(worker, basePrompt);
+      prompt = getCodingPrompt(worker, basePrompt);
+      break;
     case "final":
-      return getFinalPrompt(worker, basePrompt);
+      prompt = getFinalPrompt(worker, basePrompt);
+      break;
     default:
-      return basePrompt + "Please provide a comprehensive analysis.";
+      prompt = basePrompt + "Please provide a comprehensive analysis.";
   }
+
+  if (worker === "master") {
+    prompt = appendWorkerOutputs(prompt, worker, options?.workerOutputs);
+  }
+
+  return prompt;
+}
+
+function appendWorkerOutputs(prompt: string, worker: Worker, workerOutputs?: string[]): string {
+  if (worker === "master" && workerOutputs && workerOutputs.length > 0) {
+    return (
+      prompt +
+      `\nHere are the outputs from the 3 specialist workers that you must synthesize:
+
+=== WORKER 1 OUTPUT ===
+${workerOutputs[0] || ""}
+
+=== WORKER 2 OUTPUT ===
+${workerOutputs[1] || ""}
+
+=== WORKER 3 OUTPUT ===
+${workerOutputs[2] || ""}`
+    );
+  }
+  return prompt;
 }
 
 function getResearchPrompt(worker: Worker, basePrompt: string): string {

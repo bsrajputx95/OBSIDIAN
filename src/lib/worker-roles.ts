@@ -1,0 +1,18 @@
+export const WORKER_ROLE_MAP: Record<string, string> = {
+  "research.worker1": "Market Analysis Specialist",
+  "research.worker2": "Technical Research Specialist",
+  "research.worker3": "Problem Validation Specialist",
+  "research.master": "⭐ Research Synthesis Master",
+  "reasoning.worker1": "Solution Architect",
+  "reasoning.worker2": "Risk & Optimization Analyst",
+  "reasoning.worker3": "Implementation Planner",
+  "reasoning.master": "⭐ Reasoning Synthesis Master",
+  "coding.worker1": "System Architect",
+  "coding.worker2": "Frontend & UX Developer",
+  "coding.worker3": "Security & DevOps Specialist",
+  "coding.master": "⭐ Coding Synthesis Master",
+  "final.worker1": "Research Consolidator",
+  "final.worker2": "Reasoning Consolidator",
+  "final.worker3": "Implementation Consolidator",
+  "final.master": "⭐ Final Synthesis Master",
+};

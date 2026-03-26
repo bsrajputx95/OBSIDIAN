@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 
-export type StreamChunk = string | Uint8Array;
+export type SSEChunk = string | Uint8Array;
 
 export function sseHeaders(extra?: Record<string, string>) {
   return {
@@ -11,7 +11,7 @@ export function sseHeaders(extra?: Record<string, string>) {
   } as Record<string, string>;
 }
 
-export async function sseFromGenerator(gen: AsyncGenerator<StreamChunk, void, void>) {
+export async function sseFromGenerator(gen: AsyncGenerator<SSEChunk, void, void>) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async pull(controller) {
@@ -39,6 +39,11 @@ export function heartBeat() {
 }
 
 export function requireEnv(key: string, req: NextRequest) {
+  const customKey = req.headers.get("x-provider-key");
+  if (customKey && customKey.trim() !== "") {
+    return { ok: true, value: customKey.trim() } as const;
+  }
+
   const v = process.env[key];
   if (!v || v.trim() === "") {
     return {

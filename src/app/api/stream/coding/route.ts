@@ -1,30 +1,29 @@
 import { NextRequest } from "next/server";
 import { event, heartBeat, sseFromGenerator, sseHeaders } from "@/lib/sse";
 import { streamFromProvider } from "@/lib/providers";
-import { getStagePrompt } from "@/lib/prompts";
+import { getStagePrompt, type Worker } from "@/lib/prompts";
+import { type ProviderId } from "@/lib/providers/base";
 
 export const runtime = "nodejs";
 
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const sessionId = searchParams.get("sessionId") || "unknown";
-  const worker = searchParams.get("worker") || "worker1";
-  const provider = searchParams.get("provider") || null;
-  const model = searchParams.get("model") || "";
-  const prompt = searchParams.get("prompt") || "";
+export async function POST(req: NextRequest) {
+  const { prompt, worker, sessionId, model, provider, workerOutputs = [], previousStageContext = "" } = await req.json();
+  const safeWorker = worker ?? "worker1";
+  const safeSessionId = sessionId ?? "unknown";
+  const safeModel = model ?? "";
+  const safeProvider = provider ?? null;
+  const safePrompt = prompt ?? "";
 
   async function* stream() {
     yield heartBeat();
     const start = Date.now();
-    
-    // If a provider and model are provided, stream live data
-    if (provider && model && prompt) {
+
+    if (safeProvider && safeModel && safePrompt) {
       try {
-        // Enhance prompt with stage-specific instructions
-        const enhancedPrompt = getStagePrompt("coding", worker as any, prompt);
-        for await (const chunk of streamFromProvider(provider as any, model, enhancedPrompt, req)) {
+        const enhancedPrompt = getStagePrompt("coding", safeWorker as Worker, safePrompt, { workerOutputs, previousStageContext });
+        for await (const chunk of streamFromProvider(safeProvider as ProviderId, safeModel, enhancedPrompt, req)) {
           if (chunk.text) {
-            yield event({ sessionId, worker, ts: Date.now(), text: chunk.text }, "message");
+            yield event({ sessionId: safeSessionId, worker: safeWorker, ts: Date.now(), text: chunk.text }, "message");
           }
           if (chunk.error) {
             yield event({ error: chunk.error }, "message");
@@ -34,6 +33,7 @@ export async function GET(req: NextRequest) {
             return;
           }
         }
+        yield event({ done: true, tookMs: Date.now() - start }, "done");
       } catch (error) {
         yield event({ error: `Streaming error: ${error}` }, "message");
         yield event({ done: true, tookMs: Date.now() - start }, "done");
@@ -41,8 +41,7 @@ export async function GET(req: NextRequest) {
       return;
     }
 
-    // Fallback to dummy content if no provider/model
-    if (worker !== "master") {
+    if (safeWorker !== "master") {
       const contentMap: Record<string, string[]> = {
         worker1: [
           "File structure: src/app/api/stream/*, src/components/*, src/lib/providers/*, src/lib/store/*.",
@@ -61,9 +60,9 @@ export async function GET(req: NextRequest) {
         ],
       };
 
-      for (const line of contentMap[worker] ?? []) {
+      for (const line of contentMap[safeWorker] ?? []) {
         await new Promise((r) => setTimeout(r, 400));
-        yield event({ sessionId, worker, ts: Date.now(), text: line }, "message");
+        yield event({ sessionId: safeSessionId, worker: safeWorker, ts: Date.now(), text: line }, "message");
       }
       yield event({ done: true, tookMs: Date.now() - start }, "done");
       return;
@@ -76,7 +75,7 @@ export async function GET(req: NextRequest) {
     ];
     for (const line of lines) {
       await new Promise((r) => setTimeout(r, 350));
-      yield event({ sessionId, worker, ts: Date.now(), text: line }, "message");
+      yield event({ sessionId: safeSessionId, worker: safeWorker, ts: Date.now(), text: line }, "message");
     }
     yield event({ done: true, tookMs: Date.now() - start }, "done");
   }

@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
-import { event, heartBeat, requireEnv } from "@/lib/sse";
+import { requireEnv } from "@/lib/sse";
 
-export type ProviderId = 
+export type ProviderId =
   | "openrouter"
-  | "openai" 
+  | "openai"
   | "anthropic"
   | "gemini"
   | "xai"
@@ -12,10 +12,6 @@ export type ProviderId =
   | "cohere"
   | "together";
 
-export interface StreamingProvider {
-  stream(model: string, prompt: string, req: NextRequest): AsyncGenerator<any, void, unknown>;
-}
-
 export interface StreamChunk {
   text?: string;
   error?: string;
@@ -23,29 +19,45 @@ export interface StreamChunk {
   tookMs?: number;
 }
 
-export function createStreamingResponse(generator: AsyncGenerator<StreamChunk, void, unknown>) {
-  return async function* stream() {
-    yield heartBeat();
-    const start = Date.now();
-    
-    try {
-      for await (const chunk of generator) {
-        if (chunk.text) {
-          yield event({ text: chunk.text }, "message");
-        }
-        if (chunk.error) {
-          yield event({ error: chunk.error }, "message");
-        }
-        if (chunk.done) {
-          yield event({ done: true, tookMs: Date.now() - start }, "done");
+export async function* parseOpenAICompatibleStream(res: Response, providerName: string): AsyncGenerator<StreamChunk, void, unknown> {
+  if (!res.body) {
+    yield { error: `${providerName} response body is null` };
+    return;
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+        const payload = trimmed.replace(/^data:\s*/, "");
+        if (payload === "[DONE]") {
+          yield { done: true };
           return;
         }
+        try {
+          const json = JSON.parse(payload);
+          const content = json.choices?.[0]?.delta?.content;
+          if (content) {
+            yield { text: content };
+          }
+        } catch {
+        }
       }
-    } catch (error) {
-      yield event({ error: `Streaming error: ${error}` }, "message");
-      yield event({ done: true, tookMs: Date.now() - start }, "done");
     }
-  };
+  } catch (error) {
+    yield { error: `${providerName} streaming error: ${error}` };
+  }
 }
 
 export function getApiKey(provider: ProviderId, req: NextRequest): { ok: boolean; value?: string; error?: string } {

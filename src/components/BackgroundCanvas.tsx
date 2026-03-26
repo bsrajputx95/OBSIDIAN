@@ -1,7 +1,7 @@
 "use client";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Stars, Line, Grid } from "@react-three/drei";
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import * as THREE from "three";
 
 type Vec3 = [number, number, number];
@@ -47,7 +47,6 @@ function Network() {
 
   const edges = useMemo(() => {
     const pairs: Array<[Vec3, Vec3]> = [];
-    // connect each node to its two nearest neighbors
     for (let i = 0; i < nodes.length; i++) {
       const distances = nodes
         .map((n, j) => ({ j, d: Math.hypot(n.p[0] - nodes[i].p[0], n.p[1] - nodes[i].p[1], n.p[2] - nodes[i].p[2]) }))
@@ -85,12 +84,22 @@ function Scene() {
 }
 
 export function BackgroundCanvas() {
+  const [disabled, setDisabled] = useState(false);
+
+  useEffect(() => {
+    if (navigator.hardwareConcurrency <= 2) {
+      localStorage.setItem("obsidian-3d-disabled", "true");
+    }
+    setDisabled(localStorage.getItem("obsidian-3d-disabled") === "true");
+  }, []);
+
+  if (disabled) return null;
+
   return (
     <div className="pointer-events-none fixed inset-0 -z-10">
       <Canvas camera={{ position: [0, 0, 8], fov: 55 }}>
         <Scene />
       </Canvas>
-      {/* Gradient overlay for depth */}
       <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/30 to-black/80" />
     </div>
   );

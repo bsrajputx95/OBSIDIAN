@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 import { getApiKey, parseOpenAICompatibleStream, type StreamChunk } from "./base";
 
-export async function* streamFromOpenAI(model: string, prompt: string, req: NextRequest): AsyncGenerator<StreamChunk, void, unknown> {
-  const keyResult = getApiKey("openai", req);
+export async function* streamFromXAI(model: string, prompt: string, req: NextRequest): AsyncGenerator<StreamChunk, void, unknown> {
+  const keyResult = getApiKey("xai", req);
   if (!keyResult.ok) {
     yield { error: keyResult.error };
     return;
@@ -17,7 +17,7 @@ export async function* streamFromOpenAI(model: string, prompt: string, req: Next
   };
 
   try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    const res = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -28,18 +28,17 @@ export async function* streamFromOpenAI(model: string, prompt: string, req: Next
 
     if (!res.ok) {
       const errorText = await res.text().catch(() => "");
-      yield { error: `OpenAI request failed: ${res.status} ${errorText}` };
+      yield { error: `xAI request failed: ${res.status} ${errorText}` };
       return;
     }
 
     if (!res.body) {
-      yield { error: "No response body from OpenAI" };
+      yield { error: "No response body from xAI" };
       return;
     }
 
-    yield* parseOpenAICompatibleStream(res, "OpenAI");
+    yield* parseOpenAICompatibleStream(res, "xAI");
   } catch (error) {
-    yield { error: `OpenAI streaming error: ${error}` };
+    yield { error: `xAI streaming error: ${error}` };
   }
 }
-

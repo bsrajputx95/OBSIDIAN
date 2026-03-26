@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 export type StageName = "research" | "reasoning" | "coding" | "final";
 
@@ -29,8 +30,7 @@ export type ProviderId =
   | "mistral"
   | "groq"
   | "cohere"
-  | "together"
-  | "bedrock";
+  | "together";
 
 export type ModelOption = {
   id: string;
@@ -133,70 +133,119 @@ const initialSlots: Record<ModelSlotKey, string> = {
   "final.master": "",
 };
 
-function applyOpenRouterDefaults(): Record<ModelSlotKey, string> {
-  // Based on user's defaults per stage; master same across all
-  const master = "meta-llama/llama-4-scout";
+function applyRecommendedDefaults(provider: string): Record<ModelSlotKey, string> {
   const next: Record<ModelSlotKey, string> = { ...initialSlots };
-  next["research.worker1"] = "alibaba/tongyi-deepresearch-30b-a3b";
-  next["research.worker2"] = "google/gemma-3-27b-it";
-  next["research.worker3"] = "meituan/longcat-flash-chat";
-  next["research.master"] = master;
 
-  next["reasoning.worker1"] = "deepseek/deepseek-r1-distill-llama-70b";
-  next["reasoning.worker2"] = "deepseek/deepseek-r1";
-  next["reasoning.worker3"] = "microsoft/mai-ds-r1";
-  next["reasoning.master"] = master;
+  if (provider === "openrouter") {
+    // Top-tier open-source / commercial mix available on OpenRouter
+    const primary = "meta-llama/llama-3.3-70b-instruct";
+    
+    // Research Stage: Fast, high-context models
+    next["research.worker1"] = "google/gemini-2.5-flash";
+    next["research.worker2"] = "meta-llama/llama-3.3-70b-instruct";
+    next["research.worker3"] = "anthropic/claude-3-haiku";
+    next["research.master"] = primary;
 
-  next["coding.worker1"] = "qwen/qwen-2.5-coder-32b-instruct";
-  next["coding.worker2"] = "qwen/qwen3-coder";
-  next["coding.worker3"] = "agentica-org/deepcoder-14b-preview";
-  next["coding.master"] = master;
+    // Reasoning Stage: Deep thinking models
+    next["reasoning.worker1"] = "deepseek/deepseek-r1";
+    next["reasoning.worker2"] = "deepseek/deepseek-r1-distill-llama-70b";
+    next["reasoning.worker3"] = "cognitivecomputations/dolphin3.0-r1-mistral-24b";
+    next["reasoning.master"] = primary;
 
-  next["final.worker1"] = master;
-  next["final.worker2"] = master;
-  next["final.worker3"] = master;
-  next["final.master"] = master;
+    // Coding Stage: Heavy coding-specialized models
+    next["coding.worker1"] = "qwen/qwen-2.5-coder-32b-instruct";
+    next["coding.worker2"] = "anthropic/claude-3.5-haiku"; // Very strong fast coder
+    next["coding.worker3"] = "mistralai/mistral-small-24b-instruct-2501";
+    next["coding.master"] = primary;
+
+    // Final Stage: Synthesis
+    next["final.worker1"] = primary;
+    next["final.worker2"] = primary;
+    next["final.worker3"] = primary;
+    next["final.master"] = primary;
+  } else if (provider === "groq") {
+    // Lightning fast inference — only currently supported Groq models (2025)
+    const groqPrimary = "llama-3.3-70b-versatile";
+
+    next["research.worker1"] = "llama-3.1-8b-instant";
+    next["research.worker2"] = groqPrimary;
+    next["research.worker3"] = "llama-3.3-70b-versatile";
+    next["research.master"] = groqPrimary;
+
+    next["reasoning.worker1"] = "qwen-qwq-32b";
+    next["reasoning.worker2"] = groqPrimary;
+    next["reasoning.worker3"] = "qwen-qwq-32b";
+    next["reasoning.master"] = groqPrimary;
+
+    next["coding.worker1"] = "qwen3-32b";
+    next["coding.worker2"] = groqPrimary;
+    next["coding.worker3"] = "qwen3-32b";
+    next["coding.master"] = groqPrimary;
+
+    next["final.worker1"] = groqPrimary;
+    next["final.worker2"] = groqPrimary;
+    next["final.worker3"] = groqPrimary;
+    next["final.master"] = groqPrimary;
+  }
+
   return next;
 }
 
-export const useModelConfig = create<ModelConfigState>((set, get) => ({
-  provider: null,
-  apiKey: "",
-  options: [],
-  slots: initialSlots,
-  setProvider: (p) => set({ provider: p }),
-  setApiKey: (k) => set({ apiKey: k }),
-  fetchModels: async () => {
-    const p = get().provider;
-    const k = get().apiKey;
-    if (!p) return;
-    if (p === "openrouter") {
-      set({ options: OPENROUTER_OPTIONS, slots: applyOpenRouterDefaults() });
-      return;
-    }
-    try {
-      const res = await fetch("/api/models", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: p, apiKey: k }),
-      });
-      if (!res.ok) {
-        set({ options: [] });
-        return;
-      }
-      const data = await res.json();
-      const ids: string[] = Array.isArray(data?.models) ? data.models : [];
-      const opts: ModelOption[] = ids.map((id) => ({ id, label: id, provider: p }));
-      set({ options: opts });
-    } catch {
-      set({ options: [] });
-    }
-  },
-  setSlot: (key, modelId) => set((s) => ({ slots: { ...s.slots, [key]: modelId } })),
-  setAllTo: (modelId) =>
-    set(() => {
-      const next: Record<ModelSlotKey, string> = { ...initialSlots };
-      (Object.keys(next) as ModelSlotKey[]).forEach((k) => (next[k] = modelId));
-      return { slots: next };
+export const useModelConfig = create<ModelConfigState>()(
+  persist(
+    (set, get) => ({
+      provider: null,
+      apiKey: "",
+      options: [],
+      slots: initialSlots,
+      setProvider: (p) => set({ provider: p }),
+      setApiKey: (k) => set({ apiKey: k }),
+      fetchModels: async () => {
+        const p = get().provider;
+        const k = get().apiKey;
+        if (!p) return;
+        if (p === "openrouter") {
+          set({ options: OPENROUTER_OPTIONS, slots: applyRecommendedDefaults(p) });
+          return;
+        }
+        try {
+          const res = await fetch("/api/models", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ provider: p, apiKey: k }),
+          });
+          if (!res.ok) {
+            set({ options: [] });
+            return;
+          }
+          const data = await res.json();
+          const ids: string[] = Array.isArray(data?.models) ? data.models : [];
+          const opts: ModelOption[] = ids.map((id) => ({ id, label: id, provider: p }));
+          
+          if (p === "groq") {
+            set({ options: opts, slots: applyRecommendedDefaults(p) });
+          } else {
+            set({ options: opts });
+          }
+        } catch {
+          set({ options: [] });
+        }
+      },
+      setSlot: (key, modelId) => set((s) => ({ slots: { ...s.slots, [key]: modelId } })),
+      setAllTo: (modelId) =>
+        set(() => {
+          const next: Record<ModelSlotKey, string> = { ...initialSlots };
+          (Object.keys(next) as ModelSlotKey[]).forEach((k) => (next[k] = modelId));
+          return { slots: next };
+        }),
     }),
-}));
+    {
+      name: "obsidian-model-config",
+      partialize: (state) => ({
+        provider: state.provider,
+        apiKey: state.apiKey,
+        slots: state.slots,
+      }),
+    }
+  )
+);
